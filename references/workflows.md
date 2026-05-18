@@ -2,7 +2,7 @@
 
 ## Role Split
 
-- `weread-skills`: official API documentation and endpoint semantics.
+- `weread-skills`: official API documentation and endpoint semantics. Required dependency, installed from `https://cdn.weread.qq.com/skills/weread-skills.zip`.
 - `weread-plus`: orchestration, analysis, exports, recommendations, and privacy-safe presentation.
 
 Do not edit `weread-skills`. If official docs and this skill conflict, trust the official skill for endpoint fields and update this skill later.

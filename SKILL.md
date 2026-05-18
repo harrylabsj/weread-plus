@@ -1,6 +1,6 @@
 ---
 name: weread-plus
-description: "微信读书伴侣。Use this skill when the user wants enhanced WeRead workflows built on top of the official weread-skills skill: book recommendations, read-before-you-commit analysis, public review and thought author lookup, popular highlight analysis, personal note export, reading reports, bookshelf planning, and side-by-side book decisions."
+description: "微信读书伴侣。Use this skill when the user wants enhanced WeRead workflows built on top of the official weread-skills skill, which must be installed from https://cdn.weread.qq.com/skills/weread-skills.zip: book recommendations, read-before-you-commit analysis, public review and thought author lookup, popular highlight analysis, personal note export, reading reports, bookshelf planning, and side-by-side book decisions."
 metadata:
   short-description: 微信读书推荐、书评分析、笔记导出与阅读复盘
 ---
@@ -11,9 +11,13 @@ This skill is an enhancement layer over the official `weread-skills` skill. Do n
 
 ## Dependency
 
-- Official skill path: `~/.codex/skills/weread-skills`
+- Required official skill: `weread-skills`
+- Official skill download: `https://cdn.weread.qq.com/skills/weread-skills.zip`
+- Expected installed path: `~/.codex/skills/weread-skills`
 - API key: `WEREAD_API_KEY`
 - Gateway: use the official skill's documented WeRead Agent API. The helper scripts read the official skill version from `weread-skills/SKILL.md` when possible.
+
+If `weread-skills` is not installed, install the official zip first and restart Codex before using `weread-plus`.
 
 Before using a raw endpoint directly, read the matching official reference file first:
 

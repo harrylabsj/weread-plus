@@ -240,6 +240,89 @@ def book_author(book: dict[str, Any]) -> str:
     return str(book.get("author") or book.get("authorName") or "").strip()
 
 
+def normalized_title(value: Any) -> str:
+    text = str(value or "").lower()
+    text = re.sub(r"[（(][^）)]*[）)]", "", text)
+    return re.sub(r"[\s《》〈〉“”\"'‘’:：·.\-—_，,、/]+", "", text)
+
+
+def normalized_author(value: Any) -> str:
+    text = str(value or "").lower()
+    text = re.sub(r"[\[【（(][^\]】）)]*[\]】）)]", "", text)
+    return re.sub(r"[\s《》〈〉“”\"'‘’:：·.\-—_，,、/]+", "", text)
+
+
+def book_identity_keys(book: dict[str, Any]) -> tuple[str, str, str]:
+    return book_id(book), normalized_title(book_title(book)), normalized_author(book_author(book))
+
+
+def _book_state_entry(book: dict[str, Any]) -> dict[str, Any]:
+    return {
+        "bookId": book_id(book),
+        "title": book_title(book),
+        "author": book_author(book),
+    }
+
+
+def _empty_book_state() -> dict[str, Any]:
+    state: dict[str, Any] = {}
+    for prefix in ("shelf", "finished"):
+        state[f"{prefix}Ids"] = set()
+        state[f"{prefix}TitleKeys"] = set()
+        state[f"{prefix}TitleAuthorKeys"] = set()
+        state[f"{prefix}BooksById"] = {}
+        state[f"{prefix}BooksByTitle"] = {}
+        state[f"{prefix}BooksByTitleAuthor"] = {}
+    return state
+
+
+def remember_book_state(state: dict[str, Any], book: dict[str, Any], *, prefix: str) -> None:
+    bid, title_key, author_key = book_identity_keys(book)
+    entry = _book_state_entry(book)
+    if bid:
+        state[f"{prefix}Ids"].add(bid)
+        state[f"{prefix}BooksById"].setdefault(bid, entry)
+    if not title_key:
+        return
+    if len(title_key) >= 4:
+        state[f"{prefix}TitleKeys"].add(title_key)
+        state[f"{prefix}BooksByTitle"].setdefault(title_key, entry)
+    if author_key:
+        key = (title_key, author_key)
+        state[f"{prefix}TitleAuthorKeys"].add(key)
+        state[f"{prefix}BooksByTitleAuthor"].setdefault(key, entry)
+
+
+def reading_state_from_shelf(shelf: dict[str, Any]) -> dict[str, Any]:
+    state = _empty_book_state()
+    for item in shelf.get("books") or []:
+        remember_book_state(state, item, prefix="shelf")
+        if item.get("finishReading") == 1:
+            remember_book_state(state, item, prefix="finished")
+    return state
+
+
+def matching_book_in_state(book: dict[str, Any], state: dict[str, Any], *, prefix: str) -> dict[str, Any] | None:
+    bid, title_key, author_key = book_identity_keys(book)
+    if bid and bid in state.get(f"{prefix}Ids", set()):
+        return state.get(f"{prefix}BooksById", {}).get(bid) or {"bookId": bid}
+    if title_key and author_key:
+        by_title_author = state.get(f"{prefix}BooksByTitleAuthor", {})
+        key = (title_key, author_key)
+        if key in by_title_author:
+            return by_title_author[key]
+        for known_title, known_author in state.get(f"{prefix}TitleAuthorKeys", set()):
+            if title_key == known_title and (author_key in known_author or known_author in author_key):
+                return by_title_author.get((known_title, known_author))
+    if title_key and not author_key and len(title_key) >= 4 and title_key in state.get(f"{prefix}TitleKeys", set()):
+        return state.get(f"{prefix}BooksByTitle", {}).get(title_key)
+    return None
+
+
+def matches_reading_state(book: dict[str, Any], state: dict[str, Any], *, prefix: str) -> bool:
+    return matching_book_in_state(book, state, prefix=prefix) is not None
+
+
 def reading_link(bookid: str, chapter_uid: Any | None = None) -> str:
     if not bookid:
         return ""

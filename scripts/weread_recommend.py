@@ -18,9 +18,11 @@ from weread_common import (
     extract_book,
     fail,
     json_dumps,
+    matches_reading_state,
     rating_text,
     reading_count_score,
     reading_link,
+    reading_state_from_shelf,
     resolve_book,
     search_books,
     seconds_text,
@@ -28,66 +30,6 @@ from weread_common import (
 
 
 MODE_CHOICES = ("safe", "expand", "challenge")
-
-
-def _normalized_title(value: Any) -> str:
-    text = str(value or "").lower()
-    text = re.sub(r"[（(][^）)]*[）)]", "", text)
-    return re.sub(r"[\s《》〈〉“”\"'‘’:：·.\-—_，,、/]+", "", text)
-
-
-def _normalized_author(value: Any) -> str:
-    text = str(value or "").lower()
-    text = re.sub(r"[\[【（(][^\]】）)]*[\]】）)]", "", text)
-    return re.sub(r"[\s《》〈〉“”\"'‘’:：·.\-—_，,、/]+", "", text)
-
-
-def _identity_keys(book: dict[str, Any]) -> tuple[str, str, str]:
-    return book_id(book), _normalized_title(book_title(book)), _normalized_author(book_author(book))
-
-
-def _remember_book(state: dict[str, Any], book: dict[str, Any], *, prefix: str) -> None:
-    bid, title_key, author_key = _identity_keys(book)
-    if bid:
-        state[f"{prefix}Ids"].add(bid)
-    if not title_key:
-        return
-    if len(title_key) >= 4:
-        state[f"{prefix}TitleKeys"].add(title_key)
-    if author_key:
-        state[f"{prefix}TitleAuthorKeys"].add((title_key, author_key))
-
-
-def reading_state_from_shelf(shelf: dict[str, Any]) -> dict[str, Any]:
-    state: dict[str, Any] = {
-        "shelfIds": set(),
-        "shelfTitleKeys": set(),
-        "shelfTitleAuthorKeys": set(),
-        "finishedIds": set(),
-        "finishedTitleKeys": set(),
-        "finishedTitleAuthorKeys": set(),
-    }
-    for item in shelf.get("books") or []:
-        _remember_book(state, item, prefix="shelf")
-        if item.get("finishReading") == 1:
-            _remember_book(state, item, prefix="finished")
-    return state
-
-
-def _matches_state(book: dict[str, Any], state: dict[str, Any], *, prefix: str) -> bool:
-    bid, title_key, author_key = _identity_keys(book)
-    if bid and bid in state.get(f"{prefix}Ids", set()):
-        return True
-    if title_key and author_key:
-        pairs = state.get(f"{prefix}TitleAuthorKeys", set())
-        if (title_key, author_key) in pairs:
-            return True
-        for known_title, known_author in pairs:
-            if title_key == known_title and (author_key in known_author or known_author in author_key):
-                return True
-    if title_key and not author_key and len(title_key) >= 4 and title_key in state.get(f"{prefix}TitleKeys", set()):
-        return True
-    return False
 
 
 def fetch_notebooks(limit: int = 200) -> list[dict[str, Any]]:
@@ -326,8 +268,8 @@ def score_candidate(
     else:
         warnings.append("拓展模式保留口味匹配，同时引入相邻主题")
 
-    on_shelf = _matches_state(book, state, prefix="shelf")
-    finished = _matches_state(book, state, prefix="finished")
+    on_shelf = matches_reading_state(book, state, prefix="shelf")
+    finished = matches_reading_state(book, state, prefix="finished")
     item["onShelf"] = on_shelf
     item["finishedReading"] = finished
 

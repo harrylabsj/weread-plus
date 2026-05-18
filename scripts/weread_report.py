@@ -15,7 +15,9 @@ from weread_common import (
     book_title,
     fail,
     json_dumps,
+    matching_book_in_state,
     reading_link,
+    reading_state_from_shelf,
     seconds_text,
     timestamp_to_date,
 )
@@ -54,11 +56,32 @@ def reading_report(mode: str) -> dict[str, Any]:
     }
 
 
+def build_recent_book_entry(book: dict[str, Any], reading_state: dict[str, Any]) -> dict[str, Any]:
+    finished = book.get("finishReading") == 1
+    related_finished = matching_book_in_state(book, reading_state, prefix="finished")
+    if related_finished and related_finished.get("bookId") == book_id(book):
+        related_finished = None
+    return {
+        "bookId": book_id(book),
+        "title": book_title(book),
+        "author": book_author(book),
+        "category": book.get("category"),
+        "readUpdateDate": timestamp_to_date(book.get("readUpdateTime")),
+        "finishReading": finished,
+        "relatedFinished": bool(related_finished),
+        "relatedFinishedBook": related_finished,
+        "isTop": book.get("isTop") == 1,
+        "secret": book.get("secret") == 1,
+        "link": reading_link(book_id(book)),
+    }
+
+
 def shelf_report() -> dict[str, Any]:
     data = api_post("/shelf/sync", {})
     books = data.get("books") or []
     albums = data.get("albums") or []
     mp = data.get("mp")
+    reading_state = reading_state_from_shelf(data)
     visible_total = len(books) + len(albums) + (1 if mp else 0)
 
     category_counts = Counter(str(book.get("category") or "未分类") for book in books)
@@ -77,20 +100,7 @@ def shelf_report() -> dict[str, Any]:
         "publicTotal": visible_total - private_total,
         "finishedEbookCount": finished,
         "categoryCounts": category_counts.most_common(20),
-        "recentBooks": [
-            {
-                "bookId": book_id(book),
-                "title": book_title(book),
-                "author": book_author(book),
-                "category": book.get("category"),
-                "readUpdateDate": timestamp_to_date(book.get("readUpdateTime")),
-                "finishReading": book.get("finishReading") == 1,
-                "isTop": book.get("isTop") == 1,
-                "secret": book.get("secret") == 1,
-                "link": reading_link(book_id(book)),
-            }
-            for book in recent
-        ],
+        "recentBooks": [build_recent_book_entry(book, reading_state) for book in recent],
     }
 
 
@@ -130,6 +140,9 @@ def markdown_report(result: dict[str, Any]) -> str:
             marks = []
             if book.get("finishReading"):
                 marks.append("读完")
+            if book.get("relatedFinished"):
+                related = book.get("relatedFinishedBook") or {}
+                marks.append(f"相关版本已读完：{related.get('title') or '同名书'}")
             if book.get("secret"):
                 marks.append("私密")
             if book.get("isTop"):

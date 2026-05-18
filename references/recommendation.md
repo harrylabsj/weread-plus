@@ -13,7 +13,7 @@ Use multiple sources to avoid repeating the WeRead homepage:
 - `/user/notebooks`: high-note books become strong preference seeds.
 - `/readdata/detail`: high-read-time books and preferred categories become preference signals.
 - `/store/search`: topic or goal expansion when the user gives a theme.
-- `/shelf/sync`: remove or flag books already on the shelf.
+- `/shelf/sync`: remove or flag books already on the shelf, and hard-exclude books whose `finishReading == 1` unless the user explicitly asks to include finished books.
 
 ## Modes
 
@@ -42,10 +42,12 @@ Positive factors:
 - High reading count
 - Category match with the user's reading profile
 - Not already on the shelf
+- Not already finished
 
 Negative or caution factors:
 
 - Already on shelf or already read
+- `finishReading == 1` means already finished; do not recommend it for a future reading plan unless the user asks for rereads
 - Overlaps too much with recent reading
 - Weak public rating
 - Thin reason or missing metadata
@@ -69,4 +71,5 @@ For the top pick, add:
 - Do not claim the score is scientific.
 - Do not recommend a book only because the rating is high.
 - Do not hide that the book is already on the user's shelf.
+- Do not put books from `readLongest` into a reading plan directly; treat them as taste evidence and verify unfinished status first.
 - Do not overfit to one seed book unless the user explicitly asks for similar books.

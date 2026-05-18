@@ -37,6 +37,8 @@ Then summarize:
 - why each may not fit
 - next action
 
+Default recommendation output excludes books already marked finished by `/shelf/sync` (`finishReading == 1`). Only use `--include-finished` when the user explicitly asks for rereads or retrospective analysis.
+
 ### User asks whether a book is worth reading
 
 Run:
@@ -115,9 +117,11 @@ python3 scripts/weread_report.py --shelf
 For planning, combine report output with recommendations:
 
 ```bash
-python3 scripts/weread_report.py --shelf --format json
+python3 scripts/weread_report.py --mode monthly --shelf --format json
 python3 scripts/weread_recommend.py --mode expand --count 8 --format json
 ```
+
+Planning rule: `readLongest` from reading reports shows what the user spent time on; it is evidence for taste and current focus, not a candidate list. Before putting any report book into a future plan, cross-check the shelf entry and exclude it when `finishReading == 1`.
 
 ## Error Handling
 

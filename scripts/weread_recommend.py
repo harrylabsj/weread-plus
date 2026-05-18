@@ -24,11 +24,70 @@ from weread_common import (
     resolve_book,
     search_books,
     seconds_text,
-    shelf_book_ids,
 )
 
 
 MODE_CHOICES = ("safe", "expand", "challenge")
+
+
+def _normalized_title(value: Any) -> str:
+    text = str(value or "").lower()
+    text = re.sub(r"[（(][^）)]*[）)]", "", text)
+    return re.sub(r"[\s《》〈〉“”\"'‘’:：·.\-—_，,、/]+", "", text)
+
+
+def _normalized_author(value: Any) -> str:
+    text = str(value or "").lower()
+    text = re.sub(r"[\[【（(][^\]】）)]*[\]】）)]", "", text)
+    return re.sub(r"[\s《》〈〉“”\"'‘’:：·.\-—_，,、/]+", "", text)
+
+
+def _identity_keys(book: dict[str, Any]) -> tuple[str, str, str]:
+    return book_id(book), _normalized_title(book_title(book)), _normalized_author(book_author(book))
+
+
+def _remember_book(state: dict[str, Any], book: dict[str, Any], *, prefix: str) -> None:
+    bid, title_key, author_key = _identity_keys(book)
+    if bid:
+        state[f"{prefix}Ids"].add(bid)
+    if not title_key:
+        return
+    if len(title_key) >= 4:
+        state[f"{prefix}TitleKeys"].add(title_key)
+    if author_key:
+        state[f"{prefix}TitleAuthorKeys"].add((title_key, author_key))
+
+
+def reading_state_from_shelf(shelf: dict[str, Any]) -> dict[str, Any]:
+    state: dict[str, Any] = {
+        "shelfIds": set(),
+        "shelfTitleKeys": set(),
+        "shelfTitleAuthorKeys": set(),
+        "finishedIds": set(),
+        "finishedTitleKeys": set(),
+        "finishedTitleAuthorKeys": set(),
+    }
+    for item in shelf.get("books") or []:
+        _remember_book(state, item, prefix="shelf")
+        if item.get("finishReading") == 1:
+            _remember_book(state, item, prefix="finished")
+    return state
+
+
+def _matches_state(book: dict[str, Any], state: dict[str, Any], *, prefix: str) -> bool:
+    bid, title_key, author_key = _identity_keys(book)
+    if bid and bid in state.get(f"{prefix}Ids", set()):
+        return True
+    if title_key and author_key:
+        pairs = state.get(f"{prefix}TitleAuthorKeys", set())
+        if (title_key, author_key) in pairs:
+            return True
+        for known_title, known_author in pairs:
+            if title_key == known_title and (author_key in known_author or known_author in author_key):
+                return True
+    if title_key and not author_key and len(title_key) >= 4 and title_key in state.get(f"{prefix}TitleKeys", set()):
+        return True
+    return False
 
 
 def fetch_notebooks(limit: int = 200) -> list[dict[str, Any]]:
@@ -97,6 +156,17 @@ def profile_summary(shelf: dict[str, Any], annual: dict[str, Any], notebooks: li
                 }
             )
 
+    recent_finished = []
+    finished_books = [item for item in shelf.get("books") or [] if item.get("finishReading") == 1]
+    for book in sorted(finished_books, key=lambda item: int(item.get("readUpdateTime") or 0), reverse=True)[:12]:
+        recent_finished.append(
+            {
+                "bookId": book_id(book),
+                "title": book_title(book),
+                "author": book_author(book),
+            }
+        )
+
     return {
         "shelfBookCount": len(shelf.get("books") or []),
         "shelfAlbumCount": len(shelf.get("albums") or []),
@@ -104,6 +174,7 @@ def profile_summary(shelf: dict[str, Any], annual: dict[str, Any], notebooks: li
         "shelfTopCategories": shelf_categories.most_common(8),
         "topNoteBooks": top_note_books,
         "readLongest": read_longest[:8],
+        "recentFinishedBooks": recent_finished,
     }
 
 
@@ -175,11 +246,27 @@ def category_matches(category: str, preferred: list[str]) -> bool:
     return any(category in item or item in category for item in preferred)
 
 
-def score_candidate(item: dict[str, Any], *, mode: str, profile: dict[str, Any], shelf_ids: set[str], goal: str | None) -> None:
+def score_candidate(
+    item: dict[str, Any],
+    *,
+    mode: str,
+    profile: dict[str, Any],
+    goal: str | None,
+    reading_state: dict[str, Any] | None = None,
+    shelf_ids: set[str] | None = None,
+) -> None:
     book = item["book"]
     factors: list[str] = []
     warnings: list[str] = []
     score = 0.0
+    state = reading_state or {
+        "shelfIds": shelf_ids or set(),
+        "shelfTitleKeys": set(),
+        "shelfTitleAuthorKeys": set(),
+        "finishedIds": set(),
+        "finishedTitleKeys": set(),
+        "finishedTitleAuthorKeys": set(),
+    }
 
     sources = set(item["sources"])
     if "personalized" in sources:
@@ -239,13 +326,18 @@ def score_candidate(item: dict[str, Any], *, mode: str, profile: dict[str, Any],
     else:
         warnings.append("拓展模式保留口味匹配，同时引入相邻主题")
 
-    bid = book_id(book)
-    if bid and bid in shelf_ids:
-        item["onShelf"] = True
+    on_shelf = _matches_state(book, state, prefix="shelf")
+    finished = _matches_state(book, state, prefix="finished")
+    item["onShelf"] = on_shelf
+    item["finishedReading"] = finished
+
+    if finished:
+        score -= 100
+        warnings.append("这本书已经读完")
+    elif on_shelf:
         score -= 18
         warnings.append("这本书已经在你的书架中")
     else:
-        item["onShelf"] = False
         score += 3
         factors.append("不在当前可见电子书书架中")
 
@@ -297,6 +389,8 @@ def markdown_output(result: dict[str, Any]) -> str:
             meta.append(str(book.get("category")))
         if book.get("newRating"):
             meta.append(rating_text(book.get("newRating")))
+        if item.get("finishedReading"):
+            meta.append("已读完")
         if item.get("onShelf"):
             meta.append("已在书架")
         meta.append(f"score {item['score']}")
@@ -324,6 +418,7 @@ def main() -> None:
     parser.add_argument("--count", type=int, default=8)
     parser.add_argument("--format", choices=("markdown", "json"), default="markdown")
     parser.add_argument("--include-shelf", action="store_true", help="Keep candidates already on shelf")
+    parser.add_argument("--include-finished", action="store_true", help="Keep candidates already marked as finished")
     args = parser.parse_args()
 
     try:
@@ -334,7 +429,7 @@ def main() -> None:
         fail(str(exc))
 
     profile = profile_summary(shelf, annual, notebooks)
-    shelf_ids = shelf_book_ids(shelf)
+    reading_state = reading_state_from_shelf(shelf)
     candidates: dict[str, dict[str, Any]] = {}
 
     try:
@@ -382,9 +477,11 @@ def main() -> None:
             continue
 
     for item in candidates.values():
-        score_candidate(item, mode=args.mode, profile=profile, shelf_ids=shelf_ids, goal=args.goal)
+        score_candidate(item, mode=args.mode, profile=profile, reading_state=reading_state, goal=args.goal)
 
     ranked = sorted(candidates.values(), key=lambda item: item["score"], reverse=True)
+    if not args.include_finished:
+        ranked = [item for item in ranked if not item.get("finishedReading")]
     if not args.include_shelf:
         ranked = [item for item in ranked if not item.get("onShelf")]
 

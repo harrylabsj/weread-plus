@@ -9,6 +9,44 @@ Do not edit `weread-skills`. If official docs and this skill conflict, trust the
 
 ## Decision Tree
 
+### User asks for a daily book briefing or "每天读一本书"
+
+If the user provides one book title:
+
+```bash
+python3 scripts/weread_daily_read.py --book "书名"
+```
+
+If the user provides several book titles and wants one book per day:
+
+```bash
+python3 scripts/weread_daily_read.py --book "书名 A" --book "书名 B" --book "书名 C" --date "2026-06-22"
+```
+
+If the user keeps a book list file:
+
+```bash
+python3 scripts/weread_daily_read.py --books-file books.txt --output daily-read.md
+```
+
+Then summarize or refine the returned dossier:
+
+- daily selected book and why it was selected
+- data boundary: metadata, table of contents, popular highlights, and public reviews; not a full-text replacement
+- theory/framework signals
+- core viewpoints
+- story, plot, or case-study signals
+- main conclusions
+- public review consensus and disagreements
+- reading questions for the user
+
+Popular-highlight coverage:
+
+- `/book/bestbookmarks` returns the whole-book popular highlight list with text and highlight counts, but the official endpoint is fixed to the service's top set and does not paginate.
+- `weread_daily_read.py --highlight-scope auto` fetches whole-book highlights and also chapter-level popular highlights when the chapter count is within `--max-chapters`.
+- Use `--highlight-scope chapters --max-chapters N` when the user explicitly asks for broader chapter-level extraction. Explain that this is best-effort coverage, not a guaranteed full corpus of every underline on WeRead.
+- Keep quotes compact in ordinary answers. Use the fetched highlights as evidence for analysis instead of dumping very long copyrighted passages.
+
 ### User asks "what should I read?"
 
 Run:

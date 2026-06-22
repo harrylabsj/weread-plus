@@ -1,6 +1,6 @@
 ---
 name: weread-plus
-description: "微信读书伴侣。Use this skill when the user wants enhanced WeRead workflows built on top of the official weread-skills skill, which must be installed from https://cdn.weread.qq.com/skills/weread-skills.zip: book recommendations, read-before-you-commit analysis, public review and thought author lookup, popular highlight analysis, personal note export, reading reports, bookshelf planning, and side-by-side book decisions."
+description: "微信读书伴侣。Use this skill when the user wants enhanced WeRead workflows built on top of the official weread-skills skill, which must be installed from https://cdn.weread.qq.com/skills/weread-skills.zip: daily book briefings, book recommendations, read-before-you-commit analysis, public review and thought author lookup, popular highlight analysis, personal note export, reading reports, bookshelf planning, and side-by-side book decisions."
 metadata:
   short-description: 微信读书推荐、书评分析、笔记导出与阅读复盘
 ---
@@ -33,12 +33,13 @@ Before using a raw endpoint directly, read the matching official reference file 
 
 Use `references/workflows.md` for the workflow decision tree and script map.
 
-1. **Recommend what to read next**: use `scripts/weread_recommend.py`, then explain results in plain language with clear reasons and caveats.
-2. **Read-before-you-commit analysis**: combine book info, public reviews, popular highlights, and similar books to answer whether a book is worth reading.
-3. **Public reviews and thought authors**: use `scripts/weread_reviews.py` to fetch public reviews, single review details, and popular-highlight thoughts. Only show author fields returned by the API.
-4. **Personal note export**: use `scripts/weread_notes_export.py` to export highlights and personal thoughts to Markdown or JSON.
-5. **Reading reports and bookshelf planning**: use `scripts/weread_report.py` for weekly, monthly, annual, overall, and shelf reports.
-6. **Generic API inspection**: use `scripts/weread_call.py` for low-level endpoint checks, and `scripts/weread_verify.py` after install or after official skill upgrades.
+1. **Daily book briefing**: use `scripts/weread_daily_read.py` when the user provides one book, a short book list, or asks for "每天读一本书". It selects the day's book, extracts popular highlights, and builds a reading dossier with theory, viewpoints, plot/cases, conclusions, and reading questions.
+2. **Recommend what to read next**: use `scripts/weread_recommend.py`, then explain results in plain language with clear reasons and caveats.
+3. **Read-before-you-commit analysis**: combine book info, public reviews, popular highlights, and similar books to answer whether a book is worth reading.
+4. **Public reviews and thought authors**: use `scripts/weread_reviews.py` to fetch public reviews, single review details, and popular-highlight thoughts. Only show author fields returned by the API.
+5. **Personal note export**: use `scripts/weread_notes_export.py` to export highlights and personal thoughts to Markdown or JSON.
+6. **Reading reports and bookshelf planning**: use `scripts/weread_report.py` for weekly, monthly, annual, overall, and shelf reports.
+7. **Generic API inspection**: use `scripts/weread_call.py` for low-level endpoint checks, and `scripts/weread_verify.py` after install or after official skill upgrades.
 
 ## Script Quick Start
 
@@ -46,6 +47,9 @@ Run scripts from this skill directory or with absolute paths:
 
 ```bash
 python3 scripts/weread_verify.py
+python3 scripts/weread_daily_read.py --book "置身事内"
+python3 scripts/weread_daily_read.py --book "置身事内" --book "可能性的艺术" --date 2026-06-22
+python3 scripts/weread_daily_read.py --books-file books.txt --highlight-scope chapters --output daily-read.md
 python3 scripts/weread_recommend.py --mode expand --count 8
 python3 scripts/weread_recommend.py --goal "AI 产品" --mode challenge
 python3 scripts/weread_reviews.py --book "三体" --type recommend --count 10
@@ -56,6 +60,8 @@ python3 scripts/weread_report.py --mode annually
 ```
 
 Scripts print JSON or Markdown designed for the agent to summarize. Prefer script output for fragile operations such as pagination, score calculation, exports, and author extraction.
+
+For daily reading briefings, state the data boundary clearly: the analysis is based on WeRead metadata, table of contents, popular highlights, and public reviews. It is a reading dossier, not a substitute for reading the full copyrighted text. The `/book/bestbookmarks` endpoint returns a fixed top set for the whole book; `weread_daily_read.py --highlight-scope chapters` can fetch chapter-level popular highlights to improve coverage, subject to `--max-chapters`.
 
 ## Recommendation Style
 
